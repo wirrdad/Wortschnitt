@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Wortschnitt</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -993,6 +993,35 @@
         drei Leben verloren, ist das Spiel vorbei.
       </div>
       <button class="btn" id="btn-help-close" data-i18n="btn_understood">Zurück</button>
+    </div>
+  </div>
+
+  <!-- ADMIN-PASSWORT (Nutzer-Wunsch 2026-11-01): Seit das Spiel öffentlich
+       über GitHub Pages läuft, ist der Admin-Modus (kein Game Over,
+       sofortiger Level-Sprung — siehe adminJump) mit einem Passwort
+       abgesichert. Bewusst ein ECHTES Formular mit <input type="password">
+       statt window.prompt() — ein natives Browser-Popup ist kein Teil des
+       Seiten-DOMs und wird von Passwort-Managern wie Bitwarden weder
+       erkannt noch automatisch ausgefüllt; ein echtes Formularfeld dagegen
+       schon (autocomplete="current-password" ist genau der Hinweis dafür).
+       WICHTIG: Das ist nur eine Hürde gegen normale Spielende, kein echter
+       Schutz gegen jemanden, der bewusst den öffentlichen Quelltext einsieht
+       (siehe ADMIN_PASSWORD weiter unten im Script) — mehr kann ein rein
+       clientseitiges Spiel ohne eigenen Server grundsätzlich nicht bieten. -->
+  <div class="screen" id="screen-admin-auth" hidden>
+    <div class="card">
+      <h2>⚙ Admin-Modus</h2>
+      <p class="tagline">Nur für dich zum Testen — bitte Passwort eingeben.</p>
+      <form id="admin-auth-form" autocomplete="on">
+        <p class="hint" id="admin-auth-error" hidden style="color:var(--chalk-red); border-color:rgba(226,86,74,.35); text-align:left;">Falsches Passwort.</p>
+        <label class="intro-demo-label" for="admin-auth-input" style="display:block; text-align:left;">Admin-Passwort</label>
+        <input type="password" id="admin-auth-input" name="password" autocomplete="current-password" required
+          style="width:100%; font-size:1rem; color:var(--chalk-white); background:rgba(0,0,0,.2); border:1.5px solid rgba(255,255,255,.22); border-radius:10px; padding:12px 14px; margin-bottom:16px; box-sizing:border-box;">
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="btn-admin-auth-cancel">Abbrechen</button>
+          <button type="submit" class="btn">Bestätigen</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -3245,6 +3274,7 @@ const I18N = {
       start: document.getElementById("screen-start"),
       setup: document.getElementById("screen-setup"),
       help: document.getElementById("screen-help"),
+      adminAuth: document.getElementById("screen-admin-auth"),
       csvHelp: document.getElementById("screen-csv-help"),
       levelIntro: document.getElementById("screen-level-intro"),
       pause: document.getElementById("screen-pause"),
@@ -6298,6 +6328,22 @@ const I18N = {
   //      triggerGameOver setzt das state.running zunächst auf false und zeigt
   //      danach den "Los geht's"-Bildschirm des Ziel-Levels.
   let adminActive = false;
+  // Admin-Passwort (Nutzer-Wunsch 2026-11-01, siehe Kommentar bei
+  // #screen-admin-auth im HTML): rein clientseitig geprüft, also NUR eine
+  // Hürde gegen normale Spielende — wer bewusst den (öffentlichen) Quelltext
+  // einsieht, kann das umgehen. Für den Zweck "Schüler/innen sollen den
+  // Admin-Modus nicht aus Versehen oder Neugier finden" reicht das.
+  const ADMIN_PASSWORD = "L2%Vd330x$";
+  // Gemeinsame Logik für "richtiges Passwort eingegeben" — identisch zu dem,
+  // was btn-admin früher direkt (ohne Passwortabfrage) ausgelöst hat.
+  function enterAdminMode(){
+    adminActive = true;
+    setupState.niveau = null; setupState.fokus = []; setupState.modus = null;
+    setupState.expandedFamilies = new Set();
+    wizardStep = 0;
+    buildStepOptions(true);
+    showScreen("setup");
+  }
   // "Vorheriges/Neu/Nächstes" ist pro Modus dieselbe Umschaltung wie bei den
   // bestehenden Knöpfen btn-next-level/btn-retry-level (siehe Button-
   // Verdrahtung unten) — hier zusätzlich mit Sprung um mehr als 1 Level
@@ -6399,16 +6445,38 @@ const I18N = {
   document.getElementById("btn-summary-gameover").addEventListener("click", ()=> openSummary("gameOver"));
   document.getElementById("btn-summary-finished").addEventListener("click", ()=> openSummary("finished"));
   document.getElementById("btn-summary-close").addEventListener("click", ()=> showScreen(summaryReturnScreen));
-  // "Admin"-Knopf (Startseite): identisch zu "Start", nur mit adminActive =
-  // true — führt danach ganz normal durch Niveau/Modus/Fokus (siehe
-  // Admin-Modus-Kommentar oben bei adminJump).
+  // "Admin"-Knopf (Startseite): zeigt jetzt zuerst die Passwort-Maske (siehe
+  // #screen-admin-auth) statt direkt adminActive zu setzen — erst nach
+  // richtigem Passwort führt's weiter durch Niveau/Modus/Fokus wie bisher
+  // (siehe enterAdminMode/Admin-Modus-Kommentar oben bei adminJump).
   document.getElementById("btn-admin").addEventListener("click", ()=>{
-    adminActive = true;
-    setupState.niveau = null; setupState.fokus = []; setupState.modus = null;
-    setupState.expandedFamilies = new Set();
-    wizardStep = 0;
-    buildStepOptions(true);
-    showScreen("setup");
+    const form = document.getElementById("admin-auth-form");
+    const input = document.getElementById("admin-auth-input");
+    form.reset();
+    document.getElementById("admin-auth-error").hidden = true;
+    showScreen("adminAuth");
+    // Fokus erst nach dem Einblenden setzen (Screen war bis eben hidden,
+    // siehe showScreen) — sonst greift der Fokus bei manchen Browsern ins
+    // Leere, weil das Feld im selben Moment erst sichtbar wird.
+    requestAnimationFrame(()=> input.focus());
+  });
+  document.getElementById("btn-admin-auth-cancel").addEventListener("click", ()=>{
+    showScreen("start");
+  });
+  document.getElementById("admin-auth-form").addEventListener("submit", (e)=>{
+    e.preventDefault(); // kein echter Seiten-Reload/GET-Request, siehe Formular oben
+    const input = document.getElementById("admin-auth-input");
+    const errorEl = document.getElementById("admin-auth-error");
+    if(input.value === ADMIN_PASSWORD){
+      enterAdminMode();
+    } else {
+      errorEl.hidden = false;
+      document.getElementById("screen-admin-auth").querySelector(".card").classList.remove("shake");
+      void document.getElementById("screen-admin-auth").querySelector(".card").offsetWidth; // Reflow erzwingen, damit .shake bei wiederholt falschem Passwort erneut von vorn abspielt
+      document.getElementById("screen-admin-auth").querySelector(".card").classList.add("shake");
+      input.value = "";
+      input.focus();
+    }
   });
   document.getElementById("btn-admin-prev").addEventListener("click", ()=> adminJump(-1));
   document.getElementById("btn-admin-restart").addEventListener("click", ()=> adminJump(0));
